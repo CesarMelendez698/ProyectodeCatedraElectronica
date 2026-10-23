@@ -208,10 +208,16 @@
 
   <!-- SCRIPT DE SINCRONIZACIÓN Y ACCIONES -->
   <script>
-    setInterval(actualizarEstado, 800);
+    let isFetching = false;
+    
+    // Sondeo ultra rápido cada 150 ms (fluidez en tiempo real)
+    setInterval(actualizarEstado, 150);
     actualizarEstado();
 
     function actualizarEstado() {
+      if (isFetching) return;
+      isFetching = true;
+
       fetch('/api/estado')
         .then(res => res.json())
         .then(data => {
@@ -268,19 +274,46 @@
         .catch(err => {
           document.getElementById('connStatus').className = 'badge bg-danger';
           document.getElementById('connStatus').innerText = 'Sin Conexión API';
+        })
+        .finally(() => {
+          isFetching = false;
         });
     }
 
+    // Respuesta instantánea al hacer clic en los modos (0 ms de retardo visual)
     function cambiarModo(modo) {
-      fetch('/api/modo/' + modo)
-        .then(() => setTimeout(actualizarEstado, 150))
-        .catch(e => console.error(e));
+      const modoBadge = document.getElementById('modoVal');
+      const btnModoAuto = document.getElementById('btnModoAuto');
+      const btnModoManual = document.getElementById('btnModoManual');
+      const btnIzq = document.getElementById('btnIzq');
+      const btnDer = document.getElementById('btnDer');
+      const btnDet = document.getElementById('btnDet');
+
+      modoBadge.innerText = modo.toUpperCase();
+      if (modo === 'automatico') {
+        modoBadge.className = 'badge bg-info text-dark fs-6';
+        btnModoAuto.className = 'btn btn-info text-dark fw-bold px-3 py-2 shadow';
+        btnModoManual.className = 'btn btn-outline-warning text-warning fw-bold px-3 py-2';
+        btnIzq.disabled = true; btnDer.disabled = true; btnDet.disabled = true;
+      } else {
+        modoBadge.className = 'badge bg-warning text-dark fs-6';
+        btnModoAuto.className = 'btn btn-outline-info fw-bold px-3 py-2';
+        btnModoManual.className = 'btn btn-warning text-dark fw-bold px-3 py-2 shadow';
+        btnIzq.disabled = false; btnDer.disabled = false; btnDet.disabled = false;
+      }
+
+      fetch('/api/modo/' + modo).then(actualizarEstado).catch(console.error);
     }
 
+    // Respuesta instantánea al presionar los comandos de motor (0 ms de retardo visual)
     function enviarComando(comando) {
-      fetch('/api/motor/' + comando)
-        .then(() => setTimeout(actualizarEstado, 150))
-        .catch(e => console.error(e));
+      const motorEl = document.getElementById('motorVal');
+      motorEl.innerText = comando.toUpperCase();
+      if (comando === 'derecha') motorEl.className = 'text-success fs-5 text-uppercase fw-bold';
+      else if (comando === 'izquierda') motorEl.className = 'text-info fs-5 text-uppercase fw-bold';
+      else motorEl.className = 'text-danger fs-5 text-uppercase fw-bold';
+
+      fetch('/api/motor/' + comando).then(actualizarEstado).catch(console.error);
     }
   </script>
 </body>

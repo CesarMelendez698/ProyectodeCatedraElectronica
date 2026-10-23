@@ -51,8 +51,8 @@ long distanciaActual = 0;
 unsigned long ultimoMuestreoSensor = 0;
 unsigned long ultimaSincronizacionAPI = 0;
 
-const unsigned long INTERVALO_SENSOR_MS = 60;   // Medir distancia cada 60 ms
-const unsigned long INTERVALO_API_MS    = 350;  // Sincronizar con la API cada 350 ms
+const unsigned long INTERVALO_SENSOR_MS = 40;   // Medir distancia cada 40 ms (tiempo real continuo)
+const unsigned long INTERVALO_API_MS    = 120;  // Sincronizar con la nube cada 120 ms (alta velocidad)
 
 // ==========================================
 // CONTROL DEL MOTOR
@@ -76,7 +76,7 @@ void detener() {
 }
 
 // ==========================================
-// MEDICIÓN RÁPIDA DE DISTANCIA
+// MEDICIÓN ULTRA RÁPIDA DE DISTANCIA
 // ==========================================
 long medirDistancia() {
   digitalWrite(PIN_TRIG, LOW);
@@ -85,9 +85,10 @@ long medirDistancia() {
   delayMicroseconds(10);
   digitalWrite(PIN_TRIG, LOW);
   
-  // Timeout optimizado a 12000 microsegundos (~2 metros máx).
-  long duracion = pulseIn(PIN_ECHO, HIGH, 12000UL);
-  if (duracion == 0) return 999; // Fuera de rango
+  // Timeout a 6000 microsegundos (~1 metro máx).
+  // Si no hay obstáculo retorna en solo 6 ms, sin congelar el bucle.
+  long duracion = pulseIn(PIN_ECHO, HIGH, 6000UL);
+  if (duracion == 0) return 999;
   return duracion * 0.034 / 2;
 }
 
@@ -102,8 +103,8 @@ void verificarWiFi() {
   WiFi.begin(ssid, pass);
   
   unsigned long inicio = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - inicio < 6000) {
-    delay(400);
+  while (WiFi.status() != WL_CONNECTED && millis() - inicio < 5000) {
+    delay(300);
     Serial.print(".");
   }
 
@@ -112,7 +113,7 @@ void verificarWiFi() {
     Serial.print("[WiFi] IP asignada: ");
     Serial.println(WiFi.localIP());
   } else {
-    Serial.println("\n[WiFi] En espera de conexión...");
+    Serial.println("\n[WiFi] En espera de red...");
   }
 }
 
@@ -120,7 +121,7 @@ void verificarWiFi() {
 // PARSEO RÁPIDO DE LA RESPUESTA DE LA API
 // ==========================================
 void procesarRespuestaServidor(const String& body) {
-  // 1. Extraer modo ("automatico" o "manual")
+  // 1. Extraer modo
   int posModo = body.indexOf("\"modo\":\"");
   if (posModo != -1) {
     int inicio = posModo + 8;
@@ -130,7 +131,7 @@ void procesarRespuestaServidor(const String& body) {
     }
   }
 
-  // 2. Extraer comando del motor ("derecha", "izquierda", "detenido")
+  // 2. Extraer comando del motor
   int posMotor = body.indexOf("\"motor\":\"");
   if (posMotor != -1) {
     int inicio = posMotor + 9;
@@ -140,7 +141,7 @@ void procesarRespuestaServidor(const String& body) {
     }
   }
 
-  // 3. Si está en modo manual, accionar el motor según la orden web
+  // 3. Si está en modo manual, aplicar de inmediato la orden de la web
   if (modoActual == "manual") {
     if (comandoManual == "derecha") girarDerecha();
     else if (comandoManual == "izquierda") girarIzquierda();
@@ -149,7 +150,7 @@ void procesarRespuestaServidor(const String& body) {
 }
 
 // ==========================================
-// COMUNICACIÓN CON LA API (SIN BLOQUEOS)
+// COMUNICACIÓN CON LA API (ULTRA RÁPIDA CON REUSO DE SOCKET)
 // ==========================================
 void sincronizarConAPI() {
   if (WiFi.status() != WL_CONNECTED) {
@@ -157,9 +158,12 @@ void sincronizarConAPI() {
     return;
   }
 
-  if (!client.connect(serverHost, serverPort)) {
-    client.stop();
-    return;
+  // Mantiene el socket caliente para no renegociar TLS en cada llamada
+  if (!client.connected()) {
+    if (!client.connect(serverHost, serverPort)) {
+      client.stop();
+      return;
+    }
   }
 
   // Construir cuerpo JSON
@@ -169,31 +173,36 @@ void sincronizarConAPI() {
   jsonBody += estadoMotor;
   jsonBody += "\"}";
 
-  // Enviar petición HTTP POST
+  // Enviar petición HTTP POST con Keep-Alive
   client.println("POST /api/telemetry HTTP/1.1");
   client.print("Host: ");
   client.println(serverHost);
   client.println("Content-Type: application/json");
   client.print("Content-Length: ");
   client.println(jsonBody.length());
-  client.println("Connection: close");
+  client.println("Connection: keep-alive");
   client.println();
   client.println(jsonBody);
 
-  // Leer respuesta con timeout corto (máximo 400ms)
+  // Leer respuesta con timeout de solo 80 ms
   unsigned long t0 = millis();
-  while (client.connected() && (millis() - t0 < 400)) {
+  bool respuestaProcesada = false;
+  while (client.connected() && (millis() - t0 < 80)) {
     if (client.available()) {
       String linea = client.readStringUntil('\n');
       if (linea == "\r" || linea.length() == 0) {
         String respuesta = client.readString();
         procesarRespuestaServidor(respuesta);
+        respuestaProcesada = true;
         break;
       }
     }
   }
 
-  client.stop();
+  // Si el servidor cerró la conexión o hubo timeout, resetear cliente
+  if (!respuestaProcesada || !client.connected()) {
+    client.stop();
+  }
 }
 
 // ==========================================
