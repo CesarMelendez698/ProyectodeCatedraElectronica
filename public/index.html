@@ -19,16 +19,16 @@
       max-width: 980px;
     }
     .header-box {
-      border-bottom: 3px solid #004d98;
-      background: linear-gradient(90deg, rgba(0,77,152,0.15) 0%, rgba(165,0,68,0.15) 100%);
+      border-bottom: 3px solid #eec550;
+      background: linear-gradient(90deg, rgba(238,197,80,0.18) 0%, rgba(14,43,92,0.35) 50%, rgba(238,197,80,0.18) 100%);
       border-radius: 12px;
       padding: 1.25rem;
     }
-    .barca-logo {
+    .madrid-logo, .barca-logo {
       width: 75px;
       height: 75px;
       object-fit: contain;
-      filter: drop-shadow(0 4px 8px rgba(0,0,0,0.4));
+      filter: drop-shadow(0 4px 10px rgba(0,0,0,0.5));
     }
     .card-custom {
       background: #151f38;
@@ -52,13 +52,13 @@
       height: 105px;
       object-fit: cover;
       border-radius: 50%;
-      border: 3px solid #004d98;
+      border: 3px solid #eec550;
       box-shadow: 0 4px 12px rgba(0,0,0,0.5);
       transition: transform 0.3s ease;
     }
     .member-img:hover {
       transform: scale(1.08);
-      border-color: #a50044;
+      border-color: #38bdf8;
     }
     .btn-barca-mode {
       border: 2px solid #004d98;
@@ -89,14 +89,14 @@
 <body class="py-4">
   <div class="container main-container">
     
-    <!-- ENCABEZADO CON LOGO DE FC BARCELONA -->
+    <!-- ENCABEZADO CON LOGO DE REAL MADRID -->
     <div class="header-box d-flex justify-content-between align-items-center mb-4 shadow">
-      <img src="https://upload.wikimedia.org/wikipedia/en/4/47/FC_Barcelona_%28crest%29.svg" alt="FC Barcelona" class="barca-logo" onerror="this.src='https://cdn.iconscout.com/icon/free/png-256/free-fc-barcelona-crest-logo-symbol-shield-sport-team-38079.png'">
+      <img src="https://upload.wikimedia.org/wikipedia/en/5/56/Real_Madrid_CF.svg" alt="Real Madrid" class="madrid-logo" onerror="this.src='https://upload.wikimedia.org/wikipedia/commons/thumb/c/c7/Real_Madrid_CF.svg/300px-Real_Madrid_CF.svg.png'">
       <div class="text-center">
         <h2 class="mb-1 fw-bold text-white">Control de Giro con Sensor</h2>
         <p class="text-info-emphasis mb-0 small">Arquitectura en la Nube (API REST + IoT)</p>
       </div>
-      <img src="https://upload.wikimedia.org/wikipedia/en/4/47/FC_Barcelona_%28crest%29.svg" alt="FC Barcelona" class="barca-logo" onerror="this.src='https://cdn.iconscout.com/icon/free/png-256/free-fc-barcelona-crest-logo-symbol-shield-sport-team-38079.png'">
+      <img src="https://upload.wikimedia.org/wikipedia/en/5/56/Real_Madrid_CF.svg" alt="Real Madrid" class="madrid-logo" onerror="this.src='https://upload.wikimedia.org/wikipedia/commons/thumb/c/c7/Real_Madrid_CF.svg/300px-Real_Madrid_CF.svg.png'">
     </div>
 
     <!-- PANELES PRINCIPALES: MÉTRICAS Y CONTROL -->
@@ -201,7 +201,7 @@
     </div>
 
     <footer class="text-center text-secondary small py-3 mt-3">
-      Proyecto EAI441 · FC Barcelona · Sincronización en tiempo real vía API REST
+      Proyecto EAI441 · Real Madrid CF · Sincronización en tiempo real vía API REST
     </footer>
 
   </div>
