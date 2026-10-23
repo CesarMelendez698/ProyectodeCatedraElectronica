@@ -234,14 +234,25 @@ void loop() {
   // 1. LECTURA DEL SENSOR Y CONTROL AUTOMÁTICO (Cada 60 ms)
   if (tiempoActual - ultimoMuestreoSensor >= INTERVALO_SENSOR_MS) {
     ultimoMuestreoSensor = tiempoActual;
-    
+
+    // Medir la distancia en ambos modos continuamente
     distanciaActual = medirDistancia();
 
-    // Solo si estamos en Modo Automático el sensor decide el giro:
+    // 1. MODO AUTOMÁTICO: El motor respeta estrictamente la distancia del sensor
     if (modoActual == "automatico") {
       if (distanciaActual >= 10 && distanciaActual <= 25) {
         girarDerecha();
       } else if (distanciaActual >= 26 && distanciaActual <= 40) {
+        girarIzquierda();
+      } else {
+        detener();
+      }
+    } 
+    // 2. MODO MANUAL: Gira según el botón presionado en la web (SIN IMPORTAR LA DISTANCIA)
+    else {
+      if (comandoManual == "derecha") {
+        girarDerecha();
+      } else if (comandoManual == "izquierda") {
         girarIzquierda();
       } else {
         detener();

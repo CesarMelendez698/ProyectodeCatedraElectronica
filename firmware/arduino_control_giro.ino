@@ -2,7 +2,7 @@
  * ==============================================================================
  * PROYECTO DE CÁTEDRA ELECTRÓNICA (EAI441) — ARDUINO UNO R4 WiFi
  * ==============================================================================
- * ARQUITECTURA: CLIENTE IoT EN LA NUBE (OPCIÓN 1 - 100% OPTIMIZADO ULTRA RÁPIDO)
+ * ARQUITECTURA: CLIENTE IoT EN LA NUBE (OPCIÓN 1 - 100% OPTIMIZADO)
  * 
  * • Lectura ultrasónica en tiempo real y sin bloqueos (HC-SR04).
  * • Modo Automático:
@@ -23,8 +23,8 @@
   char ssid[] = SECRET_SSID;
   char pass[] = SECRET_PASS;
 #else
-  char ssid[] = "TU_WIFI_O_HOTSPOT";  // Coloca el nombre de tu red
-  char pass[] = "TU_CONTRASENA";      // Coloca la contraseña de tu red
+  char ssid[] = "RedArduino";  // Coloca el nombre de tu red
+  char pass[] = "12345678";      // Coloca la contraseña de tu red
 #endif
 
 // --- 2. CONFIGURACIÓN DEL SERVIDOR EN LA NUBE (RENDER) ---
@@ -231,17 +231,28 @@ void setup() {
 void loop() {
   unsigned long tiempoActual = millis();
 
-  // 1. LECTURA DEL SENSOR Y CONTROL AUTOMÁTICO (Cada 40 ms)
+  // 1. LECTURA DEL SENSOR Y CONTROL AUTOMÁTICO (Cada 60 ms)
   if (tiempoActual - ultimoMuestreoSensor >= INTERVALO_SENSOR_MS) {
     ultimoMuestreoSensor = tiempoActual;
-    
+
+    // Medir la distancia en ambos modos continuamente
     distanciaActual = medirDistancia();
 
-    // Solo si estamos en Modo Automático el sensor decide el giro:
+    // 1. MODO AUTOMÁTICO: El motor respeta estrictamente la distancia del sensor
     if (modoActual == "automatico") {
       if (distanciaActual >= 10 && distanciaActual <= 25) {
         girarDerecha();
       } else if (distanciaActual >= 26 && distanciaActual <= 40) {
+        girarIzquierda();
+      } else {
+        detener();
+      }
+    } 
+    // 2. MODO MANUAL: Gira según el botón presionado en la web (SIN IMPORTAR LA DISTANCIA)
+    else {
+      if (comandoManual == "derecha") {
+        girarDerecha();
+      } else if (comandoManual == "izquierda") {
         girarIzquierda();
       } else {
         detener();
@@ -257,7 +268,7 @@ void loop() {
     Serial.println(estadoMotor);
   }
 
-  // 2. SINCRONIZACIÓN CON LA API (Cada 120 ms)
+  // 2. SINCRONIZACIÓN CON LA API (Cada 350 ms)
   if (tiempoActual - ultimaSincronizacionAPI >= INTERVALO_API_MS) {
     ultimaSincronizacionAPI = tiempoActual;
     sincronizarConAPI();
