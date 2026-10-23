@@ -102,7 +102,8 @@ Puedes alojar este backend en plataformas en la nube como **Render**, **Railway*
 
 ## 4. ⚙️ Reglas de Control del Modo Automático
 
-- **10 cm a 25 cm**: Giro a la **derecha**.
-- **26 cm a 40 cm**: Giro a la **izquierda**.
-- **< 10 cm o > 40 cm**: **Detenido**.
-- La distancia medida se reporta a la interfaz tanto en modo manual como en automático.
+- **Modo Automático**: El sistema lee activamente el sensor ultrasónico HC-SR04 y decide el giro según la distancia medida:
+  - **10 cm a 25 cm**: Giro a la **derecha**.
+  - **26 cm a 40 cm**: Giro a la **izquierda**.
+  - **< 10 cm o > 40 cm**: **Detenido**.
+- **Modo Manual**: NO se utiliza la lectura del sensor (el sensor se desactiva/pausa); el motor se acciona única y exclusivamente mediante los botones de la página web (Izquierda, Detener, Derecha).

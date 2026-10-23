@@ -28,9 +28,10 @@ let state = {
 // 1. Obtener estado para la página web
 app.get(["/api/estado", "/api/status"], (req, res) => {
   const isOnline = state.lastDeviceSeen && (Date.now() - state.lastDeviceSeen < 8000);
+  const dist = state.mode === "automatico" ? state.distanceCm : null;
   res.json({
-    distancia: state.distanceCm,
-    distanceCm: state.distanceCm,
+    distancia: dist,
+    distanceCm: dist,
     motor: state.motorState,
     motorState: state.motorState,
     modo: state.mode,
@@ -47,6 +48,7 @@ app.get("/api/modo/:modo", (req, res) => {
     state.mode = (modo === "automatic" || modo === "automatico") ? "automatico" : "manual";
     if (state.mode === "manual") {
       state.motorState = "detenido"; // Por seguridad, al pasar a manual se detiene
+      state.distanceCm = null;       // En manual no se usa la lectura del sensor
     }
     state.updatedAt = new Date().toISOString();
     console.log(`[WEB] Modo cambiado a: ${state.mode}`);
@@ -60,7 +62,10 @@ app.post("/api/mode", (req, res) => {
   const m = (mode || modo || "").toLowerCase();
   if (["manual", "automatico", "automatic"].includes(m)) {
     state.mode = (m === "automatic" || m === "automatico") ? "automatico" : "manual";
-    if (state.mode === "manual") state.motorState = "detenido";
+    if (state.mode === "manual") {
+      state.motorState = "detenido";
+      state.distanceCm = null;
+    }
     state.updatedAt = new Date().toISOString();
     return res.json({ ok: true, modo: state.mode, mode: state.mode });
   }
@@ -86,7 +91,7 @@ app.get("/api/motor/:comando", (req, res) => {
 
   state.motorState = validos[cmd];
   state.updatedAt = new Date().toISOString();
-  console.log(`[WEB] Comando de motor: ${state.motorState}`);
+  console.log(`[WEB] Comando de motor manual: ${state.motorState}`);
   res.json({ ok: true, motor: state.motorState });
 });
 
@@ -117,18 +122,16 @@ app.post("/api/motor", (req, res) => {
 // =============================================================================
 
 // 4. Telemetría y sincronización:
-// Arduino envía la distancia leída y su estado de motor (si está en automático).
-// El servidor le responde con el modo actual y el comando manual a ejecutar.
+// Arduino envía la distancia leída y su estado de motor (en modo automático).
+// En modo manual el sensor no se usa y el servidor responde con el comando manual de los botones web.
 app.post("/api/telemetry", (req, res) => {
   const body = req.body || {};
   const dist = body.distancia !== undefined ? body.distancia : body.distanceCm;
-  const motor = body.motor || body.motorState;
 
-  if (dist !== undefined && dist !== null && !isNaN(dist)) {
-    state.distanceCm = Number(dist);
-
-    // MODO AUTOMÁTICO: El control depende estrictamente de las lecturas del sensor ultrasónico
-    if (state.mode === "automatico") {
+  // MODO AUTOMÁTICO: Funciona leyendo las lecturas del sensor para gobernar el motor
+  if (state.mode === "automatico") {
+    if (dist !== undefined && dist !== null && !isNaN(dist) && Number(dist) >= 0) {
+      state.distanceCm = Number(dist);
       if (state.distanceCm >= 10 && state.distanceCm <= 25) {
         state.motorState = "derecha";
       } else if (state.distanceCm >= 26 && state.distanceCm <= 40) {
@@ -137,7 +140,10 @@ app.post("/api/telemetry", (req, res) => {
         state.motorState = "detenido";
       }
     }
-    // MODO MANUAL: El estado del motor NO cambia por el sensor, pero el sensor sigue reportando distancia.
+  } else {
+    // MODO MANUAL: NO se usa la lectura del sensor ultrasónico.
+    // El motor NO se altera con la telemetría, responde solo a los botones web.
+    state.distanceCm = null;
   }
 
   state.lastDeviceSeen = Date.now();

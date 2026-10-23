@@ -114,7 +114,7 @@
           <div class="distance-display my-2">
             <span id="distanciaVal">--</span>
           </div>
-          <p class="text-secondary fs-5 mb-3">centímetros</p>
+          <p class="text-secondary fs-5 mb-3" id="distanciaUnidad">centímetros</p>
           
           <div class="p-3 rounded bg-dark bg-opacity-50 text-start border border-secondary border-opacity-25">
             <div class="d-flex justify-content-between align-items-center mb-2">
@@ -174,26 +174,26 @@
       <div class="row g-3 justify-content-center">
         
         <div class="col-6 col-sm-3">
-          <img src="img/imagen1.jpeg" class="member-img mb-2" alt="Melendez Arias" onerror="this.src='https://ui-avatars.com/api/?name=Melendez+Arias&background=004d98&color=fff'">
-          <h6 class="fw-bold text-white mb-0">Melendez Arias</h6>
+          <img src="img/imagen3.jpeg" class="member-img mb-2" alt="Cesar Melendez" onerror="this.src='https://ui-avatars.com/api/?name=Cesar+Melendez&background=0e2b5c&color=eec550'">
+          <h6 class="fw-bold text-white mb-0">Cesar Melendez</h6>
           <small class="text-secondary">Integrante</small>
         </div>
 
         <div class="col-6 col-sm-3">
-          <img src="img/imagen2.jpeg" class="member-img mb-2" alt="Escobar Morán" onerror="this.src='https://ui-avatars.com/api/?name=Escobar+Moran&background=a50044&color=fff'">
-          <h6 class="fw-bold text-white mb-0">Escobar Morán</h6>
+          <img src="img/imagen2.jpeg" class="member-img mb-2" alt="Yordy Rivas" onerror="this.src='https://ui-avatars.com/api/?name=Yordy+Rivas&background=0e2b5c&color=eec550'">
+          <h6 class="fw-bold text-white mb-0">Yordy Rivas</h6>
           <small class="text-secondary">Integrante</small>
         </div>
 
         <div class="col-6 col-sm-3">
-          <img src="img/imagen3.jpeg" class="member-img mb-2" alt="Lara Franco" onerror="this.src='https://ui-avatars.com/api/?name=Lara+Franco&background=004d98&color=fff'">
-          <h6 class="fw-bold text-white mb-0">Lara Franco</h6>
+          <img src="img/imagen1.jpeg" class="member-img mb-2" alt="Cesar Lara" onerror="this.src='https://ui-avatars.com/api/?name=Cesar+Lara&background=0e2b5c&color=eec550'">
+          <h6 class="fw-bold text-white mb-0">Cesar Lara</h6>
           <small class="text-secondary">Integrante</small>
         </div>
 
         <div class="col-6 col-sm-3">
-          <img src="img/imagen4.jpeg" class="member-img mb-2" alt="Franco Rivera" onerror="this.src='https://ui-avatars.com/api/?name=Franco+Rivera&background=a50044&color=fff'">
-          <h6 class="fw-bold text-white mb-0">Franco Rivera</h6>
+          <img src="img/imagen4.jpeg" class="member-img mb-2" alt="Kevin Jafet" onerror="this.src='https://ui-avatars.com/api/?name=Kevin+Jafet&background=0e2b5c&color=eec550'">
+          <h6 class="fw-bold text-white mb-0">Kevin Jafet</h6>
           <small class="text-secondary">Integrante</small>
         </div>
 
@@ -206,115 +206,7 @@
 
   </div>
 
-  <!-- SCRIPT DE SINCRONIZACIÓN Y ACCIONES -->
-  <script>
-    let isFetching = false;
-    
-    // Sondeo ultra rápido cada 150 ms (fluidez en tiempo real)
-    setInterval(actualizarEstado, 150);
-    actualizarEstado();
-
-    function actualizarEstado() {
-      if (isFetching) return;
-      isFetching = true;
-
-      fetch('/api/estado')
-        .then(res => res.json())
-        .then(data => {
-          const dist = (data.distancia !== null && data.distancia !== undefined) ? data.distancia : data.distanceCm;
-          const motor = data.motor || data.motorState || 'detenido';
-          const modo = data.modo || data.mode || 'automatico';
-
-          document.getElementById('distanciaVal').innerText = (dist !== null && dist !== undefined) ? dist : '--';
-          
-          const motorEl = document.getElementById('motorVal');
-          motorEl.innerText = motor.toUpperCase();
-          if (motor === 'derecha') motorEl.className = 'text-success fs-5 text-uppercase fw-bold';
-          else if (motor === 'izquierda') motorEl.className = 'text-info fs-5 text-uppercase fw-bold';
-          else motorEl.className = 'text-danger fs-5 text-uppercase fw-bold';
-          
-          let modoBadge = document.getElementById('modoVal');
-          modoBadge.innerText = modo.toUpperCase();
-          
-          const btnIzq = document.getElementById('btnIzq');
-          const btnDer = document.getElementById('btnDer');
-          const btnDet = document.getElementById('btnDet');
-          const ayudaModo = document.getElementById('ayudaModo');
-          const connBadge = document.getElementById('connStatus');
-
-          if (data.deviceOnline) {
-            connBadge.className = 'badge bg-success';
-            connBadge.innerHTML = '<span class="status-dot bg-light pulse-dot"></span>Arduino En Línea';
-          } else {
-            connBadge.className = 'badge bg-secondary';
-            connBadge.innerHTML = '<span class="status-dot bg-warning pulse-dot"></span>Nube Conectada';
-          }
-
-          const btnModoAuto = document.getElementById('btnModoAuto');
-          const btnModoManual = document.getElementById('btnModoManual');
-
-          if (modo === 'automatico') {
-            modoBadge.className = 'badge bg-info text-dark fs-6';
-            btnModoAuto.className = 'btn btn-info text-dark fw-bold px-3 py-2 shadow';
-            btnModoManual.className = 'btn btn-outline-warning text-warning fw-bold px-3 py-2';
-            btnIzq.disabled = true;
-            btnDer.disabled = true;
-            btnDet.disabled = true;
-            ayudaModo.innerHTML = "<strong>Control Automático activo:</strong> El control del motor está transferido al sensor ultrasónico HC-SR04 (10-25 cm: Derecha | 26-40 cm: Izquierda | Fuera de rango: Detenido).";
-          } else {
-            modoBadge.className = 'badge bg-warning text-dark fs-6';
-            btnModoAuto.className = 'btn btn-outline-info fw-bold px-3 py-2';
-            btnModoManual.className = 'btn btn-warning text-dark fw-bold px-3 py-2 shadow';
-            btnIzq.disabled = false;
-            btnDer.disabled = false;
-            btnDet.disabled = false;
-            ayudaModo.innerHTML = "<strong>Control Manual activo:</strong> El estado del motor depende exclusivamente de los botones de navegación web. El sensor ultrasónico continúa reportando la distancia continuamente.";
-          }
-        })
-        .catch(err => {
-          document.getElementById('connStatus').className = 'badge bg-danger';
-          document.getElementById('connStatus').innerText = 'Sin Conexión API';
-        })
-        .finally(() => {
-          isFetching = false;
-        });
-    }
-
-    // Respuesta instantánea al hacer clic en los modos (0 ms de retardo visual)
-    function cambiarModo(modo) {
-      const modoBadge = document.getElementById('modoVal');
-      const btnModoAuto = document.getElementById('btnModoAuto');
-      const btnModoManual = document.getElementById('btnModoManual');
-      const btnIzq = document.getElementById('btnIzq');
-      const btnDer = document.getElementById('btnDer');
-      const btnDet = document.getElementById('btnDet');
-
-      modoBadge.innerText = modo.toUpperCase();
-      if (modo === 'automatico') {
-        modoBadge.className = 'badge bg-info text-dark fs-6';
-        btnModoAuto.className = 'btn btn-info text-dark fw-bold px-3 py-2 shadow';
-        btnModoManual.className = 'btn btn-outline-warning text-warning fw-bold px-3 py-2';
-        btnIzq.disabled = true; btnDer.disabled = true; btnDet.disabled = true;
-      } else {
-        modoBadge.className = 'badge bg-warning text-dark fs-6';
-        btnModoAuto.className = 'btn btn-outline-info fw-bold px-3 py-2';
-        btnModoManual.className = 'btn btn-warning text-dark fw-bold px-3 py-2 shadow';
-        btnIzq.disabled = false; btnDer.disabled = false; btnDet.disabled = false;
-      }
-
-      fetch('/api/modo/' + modo).then(actualizarEstado).catch(console.error);
-    }
-
-    // Respuesta instantánea al presionar los comandos de motor (0 ms de retardo visual)
-    function enviarComando(comando) {
-      const motorEl = document.getElementById('motorVal');
-      motorEl.innerText = comando.toUpperCase();
-      if (comando === 'derecha') motorEl.className = 'text-success fs-5 text-uppercase fw-bold';
-      else if (comando === 'izquierda') motorEl.className = 'text-info fs-5 text-uppercase fw-bold';
-      else motorEl.className = 'text-danger fs-5 text-uppercase fw-bold';
-
-      fetch('/api/motor/' + comando).then(actualizarEstado).catch(console.error);
-    }
-  </script>
+  <!-- SCRIPT EXTERNO DE SINCRONIZACIÓN Y ACCIONES -->
+  <script src="app.js"></script>
 </body>
 </html>

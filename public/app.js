@@ -1,109 +1,176 @@
-const API_BASE = ""; // Vacío = API en el mismo servidor. Cambia a "http://IP_DEL_DISPOSITIVO:3000" si aplica.
-const $ = (id) => document.getElementById(id);
-let mode = "manual";
-let currentDistance = null;
-let toastTimer;
+/**
+ * Lógica de conexión a la API REST y sincronización en tiempo real
+ * Control de Giro con Sensor — Proyecto EAI441
+ * 
+ * • Modo Automático: Funciona leyendo las lecturas del sensor HC-SR04 para gobernar el motor.
+ * • Modo Manual: NO usa las lecturas del sensor; el motor se acciona únicamente con los botones web.
+ */
 
-function notify(message) {
-  const el = $("toast");
-  el.textContent = message;
-  el.classList.add("show");
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.remove("show"), 2600);
+let isFetching = false;
+
+// Sondeo periódico cada 150 ms para sincronización fluida en tiempo real
+setInterval(actualizarEstado, 150);
+document.addEventListener("DOMContentLoaded", actualizarEstado);
+actualizarEstado();
+
+function actualizarEstado() {
+  if (isFetching) return;
+  isFetching = true;
+
+  fetch('/api/estado')
+    .then(res => res.json())
+    .then(data => {
+      const modo = data.modo || data.mode || 'automatico';
+      const dist = (data.distancia !== null && data.distancia !== undefined) ? data.distancia : data.distanceCm;
+      const motor = data.motor || data.motorState || 'detenido';
+
+      const distanciaEl = document.getElementById('distanciaVal');
+      const distanciaUnidadEl = document.getElementById('distanciaUnidad');
+      const modoBadge = document.getElementById('modoVal');
+      const motorEl = document.getElementById('motorVal');
+      const btnIzq = document.getElementById('btnIzq');
+      const btnDer = document.getElementById('btnDer');
+      const btnDet = document.getElementById('btnDet');
+      const btnModoAuto = document.getElementById('btnModoAuto');
+      const btnModoManual = document.getElementById('btnModoManual');
+      const ayudaModo = document.getElementById('ayudaModo');
+      const connBadge = document.getElementById('connStatus');
+
+      // Estado de conexión del dispositivo Arduino / Nube
+      if (connBadge) {
+        if (data.deviceOnline) {
+          connBadge.className = 'badge bg-success';
+          connBadge.innerHTML = '<span class="status-dot bg-light pulse-dot"></span>Arduino En Línea';
+        } else {
+          connBadge.className = 'badge bg-secondary';
+          connBadge.innerHTML = '<span class="status-dot bg-warning pulse-dot"></span>Nube Conectada';
+        }
+      }
+
+      // Modo y motor
+      if (modoBadge) modoBadge.innerText = modo.toUpperCase();
+      if (motorEl) {
+        motorEl.innerText = motor.toUpperCase();
+        if (motor === 'derecha') motorEl.className = 'text-success fs-5 text-uppercase fw-bold';
+        else if (motor === 'izquierda') motorEl.className = 'text-info fs-5 text-uppercase fw-bold';
+        else motorEl.className = 'text-danger fs-5 text-uppercase fw-bold';
+      }
+
+      // =========================================================================
+      // COMPORTAMIENTO SEGÚN EL MODO:
+      // =========================================================================
+      if (modo === 'automatico') {
+        // EN MODO AUTOMÁTICO: Funciona leyendo las lecturas del sensor
+        if (distanciaEl) {
+          distanciaEl.innerText = (dist !== null && dist !== undefined && dist >= 0) ? dist : '--';
+          distanciaEl.className = 'distance-display my-2 text-info';
+        }
+        if (distanciaUnidadEl) {
+          distanciaUnidadEl.innerHTML = '<span class="badge bg-info text-dark me-1">Sensor Activo</span> centímetros';
+        }
+
+        if (btnModoAuto) btnModoAuto.className = 'btn btn-info text-dark fw-bold px-3 py-2 shadow';
+        if (btnModoManual) btnModoManual.className = 'btn btn-outline-warning text-warning fw-bold px-3 py-2';
+        if (modoBadge) modoBadge.className = 'badge bg-info text-dark fs-6';
+
+        // En automático los botones manuales quedan deshabilitados
+        if (btnIzq) btnIzq.disabled = true;
+        if (btnDer) btnDer.disabled = true;
+        if (btnDet) btnDet.disabled = true;
+
+        if (ayudaModo) {
+          ayudaModo.innerHTML = "<strong>Control Automático activo:</strong> El sistema funciona leyendo activamente las lecturas del sensor ultrasónico HC-SR04 (10-25 cm: Derecha | 26-40 cm: Izquierda | Fuera de rango: Detenido). Los botones manuales quedan deshabilitados.";
+        }
+      } else {
+        // EN MODO MANUAL: NO se usa la lectura del sensor, solo los botones de la página
+        if (distanciaEl) {
+          distanciaEl.innerText = '--';
+          distanciaEl.className = 'distance-display my-2 text-secondary opacity-50';
+        }
+        if (distanciaUnidadEl) {
+          distanciaUnidadEl.innerHTML = '<span class="badge bg-warning text-dark me-1">Sensor Inactivo</span> Modo manual (solo botones)';
+        }
+
+        if (btnModoAuto) btnModoAuto.className = 'btn btn-outline-info fw-bold px-3 py-2';
+        if (btnModoManual) btnModoManual.className = 'btn btn-warning text-dark fw-bold px-3 py-2 shadow';
+        if (modoBadge) modoBadge.className = 'badge bg-warning text-dark fs-6';
+
+        // En manual los botones de la página se habilitan
+        if (btnIzq) btnIzq.disabled = false;
+        if (btnDer) btnDer.disabled = false;
+        if (btnDet) btnDet.disabled = false;
+
+        if (ayudaModo) {
+          ayudaModo.innerHTML = "<strong>Control Manual activo:</strong> La lectura del sensor NO se utiliza. El motor responde única y exclusivamente a los botones de la página web.";
+        }
+      }
+    })
+    .catch(err => {
+      const connBadge = document.getElementById('connStatus');
+      if (connBadge) {
+        connBadge.className = 'badge bg-danger';
+        connBadge.innerText = 'Sin Conexión API';
+      }
+    })
+    .finally(() => {
+      isFetching = false;
+    });
 }
-function setModeUI(next) {
-  mode = next;
-  $("manualMode").classList.toggle("active", mode === "manual");
-  $("automaticMode").classList.toggle("active", mode === "automatic");
-  $("heroMode").textContent = mode === "manual" ? "Control manual activo" : "Control automático activo";
-  $("controlTag").textContent = mode === "manual" ? "MANUAL" : "AUTOMÁTICO";
-  $("modeDescription").textContent = mode === "manual"
-    ? "Controla el motor con los botones de navegación."
-    : "El sensor decide el giro según la distancia medida.";
-  $("controlNote").textContent = mode === "manual"
-    ? "En modo manual, el motor responde a los comandos enviados desde esta página."
-    : "Los botones manuales quedan bloqueados mientras el control automático está activo.";
-  ["leftBtn","rightBtn","stopBtn"].forEach(id => $(id).disabled = mode !== "manual");
-}
-function renderDistance(cm) {
-  currentDistance = Number(cm);
-  if (!Number.isFinite(currentDistance) || currentDistance < 0) return;
-  $("distanceValue").textContent = currentDistance.toFixed(1);
-  $("distanceBar").style.width = `${Math.max(0, Math.min(100, currentDistance / 50 * 100))}%`;
-  let hint = "Fuera de los rangos de giro";
-  if (currentDistance >= 10 && currentDistance <= 25) hint = "Objeto detectado: giro a la derecha";
-  else if (currentDistance >= 26 && currentDistance <= 40) hint = "Objeto detectado: giro a la izquierda";
-  else if (currentDistance < 10) hint = "Objeto demasiado cerca: motor detenido";
-  $("distanceHint").textContent = hint;
-}
-function renderMotor(state) {
-  const normalized = String(state || "detenido").toLowerCase();
-  let label = "Detenido", icon = "Ⅱ", caption = "Sin movimiento", color = "var(--orange)";
-  if (normalized.includes("derecha") || normalized === "right") {
-    label = "A la derecha"; icon = "↻"; caption = "Giro a la derecha"; color = "var(--cyan)";
-  } else if (normalized.includes("izquierda") || normalized === "left") {
-    label = "A la izquierda"; icon = "↺"; caption = "Giro a la izquierda"; color = "var(--blue)";
-  } else if (normalized.includes("error")) {
-    label = "Error"; caption = "Revisa la conexión"; color = "var(--red)";
+
+// Respuesta instantánea al hacer clic en los modos (0 ms de retardo visual)
+function cambiarModo(modo) {
+  const modoBadge = document.getElementById('modoVal');
+  const btnModoAuto = document.getElementById('btnModoAuto');
+  const btnModoManual = document.getElementById('btnModoManual');
+  const btnIzq = document.getElementById('btnIzq');
+  const btnDer = document.getElementById('btnDer');
+  const btnDet = document.getElementById('btnDet');
+  const distanciaEl = document.getElementById('distanciaVal');
+  const distanciaUnidadEl = document.getElementById('distanciaUnidad');
+  const ayudaModo = document.getElementById('ayudaModo');
+
+  if (modoBadge) modoBadge.innerText = modo.toUpperCase();
+
+  if (modo === 'automatico') {
+    if (modoBadge) modoBadge.className = 'badge bg-info text-dark fs-6';
+    if (btnModoAuto) btnModoAuto.className = 'btn btn-info text-dark fw-bold px-3 py-2 shadow';
+    if (btnModoManual) btnModoManual.className = 'btn btn-outline-warning text-warning fw-bold px-3 py-2';
+    if (btnIzq) btnIzq.disabled = true;
+    if (btnDer) btnDer.disabled = true;
+    if (btnDet) btnDet.disabled = true;
+    if (distanciaUnidadEl) distanciaUnidadEl.innerHTML = '<span class="badge bg-info text-dark me-1">Sensor Activo</span> centímetros';
+    if (ayudaModo) {
+      ayudaModo.innerHTML = "<strong>Control Automático activo:</strong> El sistema funciona leyendo activamente las lecturas del sensor ultrasónico HC-SR04. Los botones manuales quedan deshabilitados.";
+    }
+  } else {
+    if (modoBadge) modoBadge.className = 'badge bg-warning text-dark fs-6';
+    if (btnModoAuto) btnModoAuto.className = 'btn btn-outline-info fw-bold px-3 py-2';
+    if (btnModoManual) btnModoManual.className = 'btn btn-warning text-dark fw-bold px-3 py-2 shadow';
+    if (btnIzq) btnIzq.disabled = false;
+    if (btnDer) btnDer.disabled = false;
+    if (btnDet) btnDet.disabled = false;
+    if (distanciaEl) {
+      distanciaEl.innerText = '--';
+      distanciaEl.className = 'distance-display my-2 text-secondary opacity-50';
+    }
+    if (distanciaUnidadEl) distanciaUnidadEl.innerHTML = '<span class="badge bg-warning text-dark me-1">Sensor Inactivo</span> Modo manual (solo botones)';
+    if (ayudaModo) {
+      ayudaModo.innerHTML = "<strong>Control Manual activo:</strong> La lectura del sensor NO se utiliza. El motor responde única y exclusivamente a los botones de la página web.";
+    }
   }
-  $("motorState").textContent = label;
-  $("motorIcon").textContent = icon;
-  $("motorHint").textContent = label === "Detenido" ? "El motor está en reposo" : "Comando de movimiento activo";
-  $("motorStateCaption").textContent = caption;
-  $("motorStateDot").style.background = color;
+
+  fetch('/api/modo/' + modo).then(actualizarEstado).catch(console.error);
 }
-async function requestJSON(path, options = {}) {
-  const response = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers: { "Content-Type": "application/json", ...(options.headers || {}) }
-  });
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  return response.json();
-}
-async function sendMode(next) {
-  try {
-    await requestJSON("/api/mode", { method: "POST", body: JSON.stringify({ mode: next }) });
-    setModeUI(next);
-    notify(`Modo ${next === "manual" ? "manual" : "automático"} activado`);
-    await refreshStatus();
-  } catch (e) {
-    // La demo local funciona aunque todavía no se haya iniciado la API.
-    setModeUI(next);
-    notify("Modo actualizado en la interfaz. Inicia la API para conectar el dispositivo.");
+
+// Respuesta instantánea al presionar los comandos de motor (0 ms de retardo visual)
+function enviarComando(comando) {
+  const motorEl = document.getElementById('motorVal');
+  if (motorEl) {
+    motorEl.innerText = comando.toUpperCase();
+    if (comando === 'derecha') motorEl.className = 'text-success fs-5 text-uppercase fw-bold';
+    else if (comando === 'izquierda') motorEl.className = 'text-info fs-5 text-uppercase fw-bold';
+    else motorEl.className = 'text-danger fs-5 text-uppercase fw-bold';
   }
+
+  fetch('/api/motor/' + comando).then(actualizarEstado).catch(console.error);
 }
-async function sendCommand(command) {
-  if (mode !== "manual") return notify("Cambia a modo manual para usar los botones.");
-  try {
-    const result = await requestJSON("/api/motor", { method: "POST", body: JSON.stringify({ command }) });
-    renderMotor(result.motorState || command);
-    notify("Comando enviado al dispositivo");
-  } catch (e) {
-    renderMotor(command);
-    notify("Vista de demostración: inicia la API para accionar el motor real.");
-  }
-}
-async function refreshStatus() {
-  try {
-    const data = await requestJSON("/api/status");
-    $("connectionText").textContent = "API conectada";
-    $("connectionDot").style.background = "var(--cyan)";
-    if (data.distanceCm !== undefined && data.distanceCm !== null) renderDistance(data.distanceCm);
-    if (data.motorState) renderMotor(data.motorState);
-    if (data.mode && data.mode !== mode) setModeUI(data.mode);
-    $("lastUpdate").textContent = `Actualizado: ${new Date().toLocaleTimeString()}`;
-  } catch (e) {
-    $("connectionText").textContent = "Modo demostración";
-    $("connectionDot").style.background = "var(--orange)";
-    $("lastUpdate").textContent = "API no conectada · interfaz en demostración";
-  }
-}
-$("manualMode").addEventListener("click", () => sendMode("manual"));
-$("automaticMode").addEventListener("click", () => sendMode("automatic"));
-$("leftBtn").addEventListener("click", () => sendCommand("left"));
-$("rightBtn").addEventListener("click", () => sendCommand("right"));
-$("stopBtn").addEventListener("click", () => sendCommand("stop"));
-setModeUI("manual");
-renderMotor("stop");
-refreshStatus();
-setInterval(refreshStatus, 1000);

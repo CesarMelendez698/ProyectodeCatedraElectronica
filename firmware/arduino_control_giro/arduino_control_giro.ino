@@ -5,13 +5,13 @@
  * ARQUITECTURA: CLIENTE IoT EN LA NUBE (OPCIÓN 1 - CONTROL ESTRICTO 100%)
  * 
  * • Modo Automático:
+ *     - Funciona leyendo activamente las lecturas del sensor ultrasónico HC-SR04.
  *     - 10 cm a 25 cm -> Gira a la DERECHA
  *     - 26 cm a 40 cm -> Gira a la IZQUIERDA
  *     - Fuera de rango (<10 cm o >40 cm) -> Se DETIENE
  * • Modo Manual:
- *     - El motor gira según el botón presionado en la web (Derecha, Izquierda, Detener).
- *     - IGNORA POR COMPLETO LA DISTANCIA DEL SENSOR.
- *     - El sensor continúa midiendo y enviando la distancia a la web sin tocar el motor.
+ *     - NO USA LA LECTURA DEL SENSOR (el sensor no se mide ni se procesa).
+ *     - El motor gira únicamente según los botones de la página web (Izquierda, Detener, Derecha).
  * ==============================================================================
  */
 
@@ -179,11 +179,20 @@ void sincronizarConAPI() {
   }
 
   // Armar cuerpo JSON
-  String jsonBody = "{\"distancia\":";
-  jsonBody += String(distanciaActual);
-  jsonBody += ",\"motor\":\"";
+  String jsonBody = "{\"modo\":\"";
+  jsonBody += modoActual;
+  jsonBody += "\",\"motor\":\"";
   jsonBody += estadoMotor;
-  jsonBody += "\"}";
+  jsonBody += "\"";
+  
+  // Solo se envían lecturas del sensor en modo automático
+  if (modoActual == "automatico") {
+    jsonBody += ",\"distancia\":";
+    jsonBody += String(distanciaActual);
+  } else {
+    jsonBody += ",\"distancia\":null";
+  }
+  jsonBody += "}";
 
   // Enviar petición POST
   client.println("POST /api/telemetry HTTP/1.1");
@@ -254,18 +263,18 @@ void setup() {
 void loop() {
   unsigned long tiempoActual = millis();
 
-  // 1. LECTURA DEL SENSOR Y ACCIONAMIENTO DEL MOTOR (Cada 50 ms)
+  // 1. CONTROL Y ACCIONAMIENTO DEL MOTOR (Cada 50 ms)
   if (tiempoActual - ultimoMuestreoSensor >= INTERVALO_SENSOR_MS) {
     ultimoMuestreoSensor = tiempoActual;
-
-    // Medir la distancia en ambos modos continuamente
-    distanciaActual = medirDistancia();
 
     // ----------------------------------------------------
     // CONTROL DEL MOTOR SEGÚN EL MODO ACTIVO:
     // ----------------------------------------------------
     if (modoActual == "automatico") {
-      // MODO AUTOMÁTICO: El motor respeta estrictamente la distancia del sensor
+      // 1. MODO AUTOMÁTICO:
+      // Funciona leyendo activamente el sensor ultrasónico para decidir el giro
+      distanciaActual = medirDistancia();
+
       if (distanciaActual >= 10 && distanciaActual <= 25) {
         girarDerecha();
       } else if (distanciaActual >= 26 && distanciaActual <= 40) {
@@ -275,7 +284,11 @@ void loop() {
       }
     } 
     else {
-      // MODO MANUAL: Gira según el botón presionado en la web (IGNORA LA DISTANCIA)
+      // 2. MODO MANUAL:
+      // NO usa la lectura del sensor (sensor inactivo).
+      // El motor responde exclusivamente a los botones de la página web.
+      distanciaActual = -1;
+
       if (comandoManual == "derecha") {
         girarDerecha();
       } else if (comandoManual == "izquierda") {
@@ -286,12 +299,17 @@ void loop() {
     }
 
     // Monitor Serie
-    Serial.print("Dist: ");
-    Serial.print(distanciaActual);
-    Serial.print(" cm | Modo: ");
-    Serial.print(modoActual);
-    Serial.print(" | Motor: ");
-    Serial.println(estadoMotor);
+    if (modoActual == "automatico") {
+      Serial.print("[AUTO] Dist: ");
+      Serial.print(distanciaActual);
+      Serial.print(" cm | Motor: ");
+      Serial.println(estadoMotor);
+    } else {
+      Serial.print("[MANUAL - Sensor Inactivo] Boton Web: ");
+      Serial.print(comandoManual);
+      Serial.print(" | Motor: ");
+      Serial.println(estadoMotor);
+    }
   }
 
   // 2. SINCRONIZACIÓN PERIÓDICA CON RENDER (Cada 350 ms)
