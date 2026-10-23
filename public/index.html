@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Control de Motor - Proyecto EAI441</title>
+  <!-- Bootstrap 5.3 CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Google Fonts: Inter -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #0b1329;
+      color: #e2e8f0;
+      min-height: 100vh;
+    }
+    .main-container {
+      max-width: 980px;
+    }
+    .header-box {
+      border-bottom: 3px solid #004d98;
+      background: linear-gradient(90deg, rgba(0,77,152,0.15) 0%, rgba(165,0,68,0.15) 100%);
+      border-radius: 12px;
+      padding: 1.25rem;
+    }
+    .barca-logo {
+      width: 75px;
+      height: 75px;
+      object-fit: contain;
+      filter: drop-shadow(0 4px 8px rgba(0,0,0,0.4));
+    }
+    .card-custom {
+      background: #151f38;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 16px;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .card-custom:hover {
+      box-shadow: 0 14px 28px -4px rgba(0, 0, 0, 0.6);
+    }
+    .distance-display {
+      font-size: 5rem;
+      font-weight: 800;
+      color: #38bdf8;
+      line-height: 1;
+      letter-spacing: -2px;
+    }
+    .member-img {
+      width: 105px;
+      height: 105px;
+      object-fit: cover;
+      border-radius: 50%;
+      border: 3px solid #004d98;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+      transition: transform 0.3s ease;
+    }
+    .member-img:hover {
+      transform: scale(1.08);
+      border-color: #a50044;
+    }
+    .btn-barca-mode {
+      border: 2px solid #004d98;
+      color: #38bdf8;
+      font-weight: 700;
+    }
+    .btn-barca-mode.active, .btn-barca-mode:hover {
+      background: #004d98;
+      color: white;
+    }
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+      margin-right: 6px;
+    }
+    .pulse-dot {
+      animation: pulse 1.8s infinite;
+    }
+    @keyframes pulse {
+      0% { opacity: 0.4; }
+      50% { opacity: 1; }
+      100% { opacity: 0.4; }
+    }
+  </style>
+</head>
+<body class="py-4">
+  <div class="container main-container">
+    
+    <!-- ENCABEZADO CON LOGO DE FC BARCELONA -->
+    <div class="header-box d-flex justify-content-between align-items-center mb-4 shadow">
+      <img src="https://upload.wikimedia.org/wikipedia/en/4/47/FC_Barcelona_%28crest%29.svg" alt="FC Barcelona" class="barca-logo" onerror="this.src='https://cdn.iconscout.com/icon/free/png-256/free-fc-barcelona-crest-logo-symbol-shield-sport-team-38079.png'">
+      <div class="text-center">
+        <h2 class="mb-1 fw-bold text-white">Control de Giro con Sensor</h2>
+        <p class="text-info-emphasis mb-0 small">Arquitectura en la Nube (API REST + IoT)</p>
+      </div>
+      <img src="https://upload.wikimedia.org/wikipedia/en/4/47/FC_Barcelona_%28crest%29.svg" alt="FC Barcelona" class="barca-logo" onerror="this.src='https://cdn.iconscout.com/icon/free/png-256/free-fc-barcelona-crest-logo-symbol-shield-sport-team-38079.png'">
+    </div>
+
+    <!-- PANELES PRINCIPALES: MÉTRICAS Y CONTROL -->
+    <div class="row text-center mb-4 g-4">
+      
+      <!-- TARJETA: DISTANCIA Y ESTADO -->
+      <div class="col-md-6">
+        <div class="card card-custom h-100 p-4 d-flex flex-column justify-content-center">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="text-secondary text-uppercase fw-semibold small">Lectura HC-SR04</span>
+            <span id="connStatus" class="badge bg-secondary"><span class="status-dot bg-warning pulse-dot"></span>Verificando</span>
+          </div>
+
+          <h4 class="text-light fw-bold mt-2">Distancia del Sensor</h4>
+          <div class="distance-display my-2">
+            <span id="distanciaVal">--</span>
+          </div>
+          <p class="text-secondary fs-5 mb-3">centímetros</p>
+          
+          <div class="p-3 rounded bg-dark bg-opacity-50 text-start border border-secondary border-opacity-25">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <span class="text-secondary">Modo de Operación:</span>
+              <span id="modoVal" class="badge bg-info text-dark fs-6 text-uppercase">Cargando...</span>
+            </div>
+            <div class="d-flex justify-content-between align-items-center">
+              <span class="text-secondary">Estado del Motor:</span>
+              <strong id="motorVal" class="text-success fs-5 text-uppercase">--</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TARJETA: PANEL DE CONTROL -->
+      <div class="col-md-6">
+        <div class="card card-custom h-100 p-4 d-flex flex-column justify-content-center">
+          <h4 class="text-light fw-bold mb-3">Panel de Control</h4>
+          
+          <!-- SELECTOR DE MODO -->
+          <div class="mb-4 d-flex justify-content-center gap-2">
+            <button class="btn btn-outline-info fw-bold px-3 py-2" id="btnModoAuto" onclick="cambiarModo('automatico')">
+              Activar Automático
+            </button>
+            <button class="btn btn-outline-warning text-warning fw-bold px-3 py-2" id="btnModoManual" onclick="cambiarModo('manual')">
+              Activar Manual
+            </button>
+          </div>
+
+          <!-- BOTONES DE GIRO DEL MOTOR -->
+          <div class="d-grid gap-3">
+            <button class="btn btn-primary btn-lg fw-bold shadow" onclick="enviarComando('izquierda')" id="btnIzq">
+              ↺ Girar a la Izquierda
+            </button>
+            <button class="btn btn-danger btn-lg fw-bold shadow" onclick="enviarComando('detener')" id="btnDet">
+              ⏹ Detener Motor
+            </button>
+            <button class="btn btn-success btn-lg fw-bold shadow" onclick="enviarComando('derecha')" id="btnDer">
+              ↻ Girar a la Derecha
+            </button>
+          </div>
+
+          <div class="mt-3 text-secondary small" id="ayudaModo">
+            En modo automático, los botones manuales quedan bloqueados por seguridad.
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- EQUIPO DE DESARROLLO -->
+    <div class="card card-custom p-4 text-center mt-2">
+      <h5 class="text-light text-uppercase fw-bold mb-4 border-bottom border-secondary border-opacity-25 pb-2">
+        Equipo de Desarrollo
+      </h5>
+      <div class="row g-3 justify-content-center">
+        
+        <div class="col-6 col-sm-3">
+          <img src="img/imagen1.jpeg" class="member-img mb-2" alt="Melendez Arias" onerror="this.src='https://ui-avatars.com/api/?name=Melendez+Arias&background=004d98&color=fff'">
+          <h6 class="fw-bold text-white mb-0">Melendez Arias</h6>
+          <small class="text-secondary">Integrante</small>
+        </div>
+
+        <div class="col-6 col-sm-3">
+          <img src="img/imagen2.jpeg" class="member-img mb-2" alt="Escobar Morán" onerror="this.src='https://ui-avatars.com/api/?name=Escobar+Moran&background=a50044&color=fff'">
+          <h6 class="fw-bold text-white mb-0">Escobar Morán</h6>
+          <small class="text-secondary">Integrante</small>
+        </div>
+
+        <div class="col-6 col-sm-3">
+          <img src="img/imagen3.jpeg" class="member-img mb-2" alt="Lara Franco" onerror="this.src='https://ui-avatars.com/api/?name=Lara+Franco&background=004d98&color=fff'">
+          <h6 class="fw-bold text-white mb-0">Lara Franco</h6>
+          <small class="text-secondary">Integrante</small>
+        </div>
+
+        <div class="col-6 col-sm-3">
+          <img src="img/imagen4.jpeg" class="member-img mb-2" alt="Franco Rivera" onerror="this.src='https://ui-avatars.com/api/?name=Franco+Rivera&background=a50044&color=fff'">
+          <h6 class="fw-bold text-white mb-0">Franco Rivera</h6>
+          <small class="text-secondary">Integrante</small>
+        </div>
+
+      </div>
+    </div>
+
+    <footer class="text-center text-secondary small py-3 mt-3">
+      Proyecto EAI441 · FC Barcelona · Sincronización en tiempo real vía API REST
+    </footer>
+
+  </div>
+
+  <!-- SCRIPT DE SINCRONIZACIÓN Y ACCIONES -->
+  <script>
+    setInterval(actualizarEstado, 800);
+    actualizarEstado();
+
+    function actualizarEstado() {
+      fetch('/api/estado')
+        .then(res => res.json())
+        .then(data => {
+          const dist = (data.distancia !== null && data.distancia !== undefined) ? data.distancia : data.distanceCm;
+          const motor = data.motor || data.motorState || 'detenido';
+          const modo = data.modo || data.mode || 'automatico';
+
+          document.getElementById('distanciaVal').innerText = (dist !== null && dist !== undefined) ? dist : '--';
+          
+          const motorEl = document.getElementById('motorVal');
+          motorEl.innerText = motor.toUpperCase();
+          if (motor === 'derecha') motorEl.className = 'text-success fs-5 text-uppercase fw-bold';
+          else if (motor === 'izquierda') motorEl.className = 'text-info fs-5 text-uppercase fw-bold';
+          else motorEl.className = 'text-danger fs-5 text-uppercase fw-bold';
+          
+          let modoBadge = document.getElementById('modoVal');
+          modoBadge.innerText = modo.toUpperCase();
+          
+          const btnIzq = document.getElementById('btnIzq');
+          const btnDer = document.getElementById('btnDer');
+          const btnDet = document.getElementById('btnDet');
+          const ayudaModo = document.getElementById('ayudaModo');
+          const connBadge = document.getElementById('connStatus');
+
+          if (data.deviceOnline) {
+            connBadge.className = 'badge bg-success';
+            connBadge.innerHTML = '<span class="status-dot bg-light pulse-dot"></span>Arduino En Línea';
+          } else {
+            connBadge.className = 'badge bg-secondary';
+            connBadge.innerHTML = '<span class="status-dot bg-warning pulse-dot"></span>Nube Conectada';
+          }
+
+          if (modo === 'automatico') {
+            modoBadge.className = 'badge bg-info text-dark fs-6';
+            btnIzq.disabled = true;
+            btnDer.disabled = true;
+            btnDet.disabled = true;
+            ayudaModo.innerText = "Modo Automático activo: el sensor HC-SR04 decide el giro según la distancia.";
+          } else {
+            modoBadge.className = 'badge bg-warning text-dark fs-6';
+            btnIzq.disabled = false;
+            btnDer.disabled = false;
+            btnDet.disabled = false;
+            ayudaModo.innerText = "Modo Manual activo: usa los botones para controlar el motor.";
+          }
+        })
+        .catch(err => {
+          document.getElementById('connStatus').className = 'badge bg-danger';
+          document.getElementById('connStatus').innerText = 'Sin Conexión API';
+        });
+    }
+
+    function cambiarModo(modo) {
+      fetch('/api/modo/' + modo)
+        .then(() => setTimeout(actualizarEstado, 150))
+        .catch(e => console.error(e));
+    }
+
+    function enviarComando(comando) {
+      fetch('/api/motor/' + comando)
+        .then(() => setTimeout(actualizarEstado, 150))
+        .catch(e => console.error(e));
+    }
+  </script>
+</body>
+</html>

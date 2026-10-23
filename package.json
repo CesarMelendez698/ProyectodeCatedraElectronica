@@ -1,0 +1,8 @@
+{
+  "name": "control-giro-sensor-eai441",
+  "version": "1.0.0",
+  "description": "Interfaz web y API REST para control de giro con sensor ultrasónico",
+  "main": "src/server.js",
+  "scripts": { "start": "node src/server.js", "dev": "node --watch src/server.js" },
+  "dependencies": { "cors": "^2.8.5", "express": "^4.21.2" }
+}
