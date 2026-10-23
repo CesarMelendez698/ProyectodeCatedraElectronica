@@ -2,7 +2,7 @@
 #ifndef SECRETS_H
 #define SECRETS_H
 
-#define SECRET_SSID "TU_RED_WIFI"
-#define SECRET_PASS "TU_CONTRASENA"
+#define SECRET_SSID "RedArduino"
+#define SECRET_PASS "12345678"
 
 #endif

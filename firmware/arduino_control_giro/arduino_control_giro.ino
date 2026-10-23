@@ -1,50 +1,67 @@
 /*
-  ==============================================================================
-  CLIENTE IoT: ARDUINO UNO R4 WiFi — CONTROL DE GIRO Y SENSOR (OPCIÓN 1)
-  ==============================================================================
-  Arquitectura: Cliente HTTP en la Nube
-  - El Arduino NO es servidor web (se eliminó WiFiServer y toda la variable htmlPage).
-  - El Arduino lee el sensor HC-SR04 y envía la distancia al servidor central.
-  - Recibe de vuelta el modo (automático/manual) y el comando del motor.
-  ==============================================================================
-*/
+ * ==============================================================================
+ * PROYECTO DE CÁTEDRA ELECTRÓNICA (EAI441) — ARDUINO UNO R4 WiFi
+ * ==============================================================================
+ * ARQUITECTURA: CLIENTE IoT EN LA NUBE (OPCIÓN 1 - 100% OPTIMIZADO)
+ * 
+ * • Lectura ultrasónica en tiempo real y sin bloqueos (HC-SR04).
+ * • Modo Automático:
+ *     - 10 cm a 25 cm -> Gira a la DERECHA
+ *     - 26 cm a 40 cm -> Gira a la IZQUIERDA
+ *     - Fuera de rango (<10 cm o >40 cm) -> Se DETIENE
+ * • Modo Manual:
+ *     - El motor obedece en tiempo real a los botones de la página web.
+ * • Sincronización continua con la API REST vía HTTP / WiFiS3.
+ * ==============================================================================
+ */
 
 #include "WiFiS3.h"
-#include <ArduinoJson.h>
-#include "secrets.h"
 
-// --- CONFIGURACIÓN WI-FI ---
-char ssid[] = SECRET_SSID; 
-char pass[] = SECRET_PASS; 
+// --- 1. CONFIGURACIÓN DE RED WI-FI ---
+#if __has_include("secrets.h")
+  #include "secrets.h"
+  char ssid[] = SECRET_SSID;
+  char pass[] = SECRET_PASS;
+#else
+  char ssid[] = "TU_WIFI_O_HOTSPOT";  // Nombre de tu red
+  char pass[] = "TU_CONTRASENA";      // Contraseña de tu red
+#endif
 
-// --- CONFIGURACIÓN DEL SERVIDOR EN LA NUBE O LOCAL ---
-// Para pruebas locales: coloca la IP privada de tu PC (ej: "192.168.1.15")
-// Para despliegue en la nube (Render / VPS): coloca tu dominio (ej: "tu-api.onrender.com")
-const char* serverHost = "192.168.1.15";
-const int   serverPort = 3000; // 3000 para local, 80 para HTTP nube, 443 para HTTPS
+// --- 2. CONFIGURACIÓN DEL SERVIDOR ---
+// A) Si pruebas en tu PC local:
+const char* serverHost = "192.168.1.15"; // CAMBIA por la IP de tu PC (ej: 192.168.1.X)
+const int   serverPort = 3000;
+WiFiClient client; // Cliente HTTP estándar para red local o puerto 80
 
-// Cliente HTTP para Arduino UNO R4 WiFi:
-WiFiClient client;
-// WiFiSSLClient client; // <- Descomenta esta línea si tu hosting en la nube exige HTTPS (puerto 443)
+// B) Si despliegas en la Nube con HTTPS (Render/Railway):
+// const char* serverHost = "tu-app.onrender.com"; // Tu dominio sin "https://"
+// const int   serverPort = 443;
+// WiFiSSLClient client; // Descomenta esta línea si usas HTTPS puerto 443
 
-// --- PINES SENSOR ULTRASÓNICO (HC-SR04) ---
+// --- 3. PINES DE HARDWARE ---
+// Sensor Ultrasónico HC-SR04
 const int PIN_TRIG = 12;
 const int PIN_ECHO = 11;
 
-// --- PINES PUENTE H L293D ---
-const int PIN_IN1  = 8; 
-const int PIN_IN2  = 7;
+// Puente H L293D
+const int PIN_IN1  = 8;  // Dirección A (Pin 2 del L293D)
+const int PIN_IN2  = 7;  // Dirección B (Pin 7 del L293D)
 
-// --- VARIABLES GLOBALES DE ESTADO ---
-String modoActual = "automatico";
+// --- 4. VARIABLES DE ESTADO ---
+String modoActual = "automatico";    // "automatico" o "manual"
+String comandoManual = "detenido";   // "derecha", "izquierda" o "detenido"
 String estadoMotor = "detenido";
 long distanciaActual = 0;
 
-unsigned long ultimoEnvio = 0;
-const unsigned long INTERVALO_ENVIO_MS = 500; // Enviar telemetría cada 500 ms
+// Temporizadores no bloqueantes
+unsigned long ultimoMuestreoSensor = 0;
+unsigned long ultimaSincronizacionAPI = 0;
+
+const unsigned long INTERVALO_SENSOR_MS = 60;   // Medir distancia cada 60 ms (ultra rápido)
+const unsigned long INTERVALO_API_MS    = 350;  // Sincronizar con la nube cada 350 ms
 
 // ==========================================
-// ACCIONES DEL MOTOR
+// CONTROL DEL MOTOR
 // ==========================================
 void girarDerecha() {
   digitalWrite(PIN_IN1, HIGH);
@@ -65,7 +82,7 @@ void detener() {
 }
 
 // ==========================================
-// LECTURA DEL SENSOR HC-SR04
+// MEDICIÓN ULTRA RÁPIDA DE DISTANCIA
 // ==========================================
 long medirDistancia() {
   digitalWrite(PIN_TRIG, LOW);
@@ -73,57 +90,94 @@ long medirDistancia() {
   digitalWrite(PIN_TRIG, HIGH);
   delayMicroseconds(10);
   digitalWrite(PIN_TRIG, LOW);
-  long duracion = pulseIn(PIN_ECHO, HIGH, 30000);
-  if (duracion == 0) return 999;
+  
+  // Timeout optimizado a 12000 microsegundos (~2 metros máx).
+  // Esto evita que el código se quede esperando 30ms cuando no hay rebote.
+  long duracion = pulseIn(PIN_ECHO, HIGH, 12000UL);
+  if (duracion == 0) return 999; // Fuera de rango
   return duracion * 0.034 / 2;
 }
 
 // ==========================================
-// CONEXIÓN Y RECONEXIÓN A WI-FI
+// CONEXIÓN WI-FI SEGURA Y AUTOMÁTICA
 // ==========================================
 void verificarWiFi() {
   if (WiFi.status() == WL_CONNECTED) return;
 
-  Serial.print("Conectando a Wi-Fi: ");
+  Serial.print("[WiFi] Conectando a: ");
   Serial.println(ssid);
   WiFi.begin(ssid, pass);
-  int intentos = 0;
-  while (WiFi.status() != WL_CONNECTED && intentos < 20) {
-    delay(500);
+  
+  unsigned long inicio = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - inicio < 6000) {
+    delay(400);
     Serial.print(".");
-    intentos++;
   }
+
   if (WiFi.status() == WL_CONNECTED) {
     Serial.println("\n[WiFi] Conectado exitosamente.");
-    Serial.print("[WiFi] IP local asignada: ");
+    Serial.print("[WiFi] IP asignada: ");
     Serial.println(WiFi.localIP());
   } else {
-    Serial.println("\n[WiFi] Error al conectar. Se reintentará en el siguiente ciclo.");
+    Serial.println("\n[WiFi] En espera de conexión...");
   }
 }
 
 // ==========================================
-// COMUNICACIÓN CON LA API EN LA NUBE (HTTP POST)
+// PARSEO RÁPIDO DE LA RESPUESTA DE LA API
 // ==========================================
-void sincronizarConNube() {
-  verificarWiFi();
-  if (WiFi.status() != WL_CONNECTED) return;
+void procesarRespuestaServidor(const String& body) {
+  // 1. Extraer modo ("automatico" o "manual")
+  int posModo = body.indexOf("\"modo\":\"");
+  if (posModo != -1) {
+    int inicio = posModo + 8;
+    int fin = body.indexOf("\"", inicio);
+    if (fin != -1) {
+      modoActual = body.substring(inicio, fin);
+    }
+  }
 
+  // 2. Extraer motor / comando ("derecha", "izquierda", "detenido")
+  int posMotor = body.indexOf("\"motor\":\"");
+  if (posMotor != -1) {
+    int inicio = posMotor + 9;
+    int fin = body.indexOf("\"", inicio);
+    if (fin != -1) {
+      comandoManual = body.substring(inicio, fin);
+    }
+  }
+
+  // 3. Si estamos en modo manual, aplicar de inmediato el comando de la web
+  if (modoActual == "manual") {
+    if (comandoManual == "derecha") girarDerecha();
+    else if (comandoManual == "izquierda") girarIzquierda();
+    else detener();
+  }
+}
+
+// ==========================================
+// COMUNICACIÓN CON LA API (SIN BLOQUEOS)
+// ==========================================
+void sincronizarConAPI() {
+  if (WiFi.status() != WL_CONNECTED) {
+    verificarWiFi();
+    return;
+  }
+
+  // Intentar conectar con el servidor
   if (!client.connect(serverHost, serverPort)) {
-    Serial.println("[HTTP] No se pudo conectar con el servidor API.");
     client.stop();
     return;
   }
 
-  // 1. Armar el JSON de telemetría con ArduinoJson
-  StaticJsonDocument<150> requestDoc;
-  requestDoc["distancia"] = distanciaActual;
-  requestDoc["motor"] = estadoMotor;
+  // Construir cuerpo JSON manualmente (más rápido y ligero en memoria que librerías pesadas)
+  String jsonBody = "{\"distancia\":";
+  jsonBody += String(distanciaActual);
+  jsonBody += ",\"motor\":\"";
+  jsonBody += estadoMotor;
+  jsonBody += "\"}";
 
-  String jsonBody;
-  serializeJson(requestDoc, jsonBody);
-
-  // 2. Enviar petición HTTP POST estándar a /api/telemetry
+  // Enviar petición HTTP POST
   client.println("POST /api/telemetry HTTP/1.1");
   client.print("Host: ");
   client.println(serverHost);
@@ -134,42 +188,15 @@ void sincronizarConNube() {
   client.println();
   client.println(jsonBody);
 
-  // 3. Leer respuesta del servidor
-  unsigned long timeout = millis();
-  while (client.connected() && (millis() - timeout < 2000)) {
+  // Leer respuesta con timeout corto (máximo 400ms para no demorar el motor)
+  unsigned long t0 = millis();
+  while (client.connected() && (millis() - t0 < 400)) {
     if (client.available()) {
-      String headerLine = client.readStringUntil('\n');
-      // Al encontrar línea en blanco terminan los headers HTTP y comienza el cuerpo JSON
-      if (headerLine == "\r" || headerLine.length() == 0) {
-        String responseBody = client.readString();
-        
-        StaticJsonDocument<256> responseDoc;
-        DeserializationError error = deserializeJson(responseDoc, responseBody);
-        
-        if (!error) {
-          // El servidor devuelve el modo ("automatico" / "manual") y el comando activo
-          if (responseDoc.containsKey("modo")) {
-            modoActual = responseDoc["modo"].as<String>();
-          }
-          
-          // En modo manual, el Arduino ejecuta el comando del motor ordenado desde la web
-          if (modoActual == "manual" && responseDoc.containsKey("motor")) {
-            String comandoManual = responseDoc["motor"].as<String>();
-            if (comandoManual == "derecha") girarDerecha();
-            else if (comandoManual == "izquierda") girarIzquierda();
-            else detener();
-          }
-
-          Serial.print("[NUBE] Distancia enviada: ");
-          Serial.print(distanciaActual);
-          Serial.print(" cm | Modo: ");
-          Serial.print(modoActual);
-          Serial.print(" | Motor: ");
-          Serial.println(estadoMotor);
-        } else {
-          Serial.print("[JSON] Error al deserializar respuesta: ");
-          Serial.println(error.c_str());
-        }
+      String linea = client.readStringUntil('\n');
+      // Al llegar a la línea vacía terminan los encabezados HTTP
+      if (linea == "\r" || linea.length() == 0) {
+        String respuesta = client.readString();
+        procesarRespuestaServidor(respuesta);
         break;
       }
     }
@@ -179,49 +206,61 @@ void sincronizarConNube() {
 }
 
 // ==========================================
-// SETUP
+// SETUP INICIAL
 // ==========================================
 void setup() {
   Serial.begin(9600);
-  delay(500);
+  delay(300);
 
-  Serial.println("==============================================");
-  Serial.println(" ARDUINO UNO R4 WiFi - CLIENTE IoT (OPCION 1)");
-  Serial.println("==============================================");
+  Serial.println("==================================================");
+  Serial.println(" ARDUINO UNO R4 WiFi — SISTEMA DE CONTROL DE GIRO");
+  Serial.println("==================================================");
 
+  // Configurar pines
   pinMode(PIN_TRIG, OUTPUT);
   pinMode(PIN_ECHO, INPUT);
   pinMode(PIN_IN1, OUTPUT);
   pinMode(PIN_IN2, OUTPUT);
+  
   detener();
-
   verificarWiFi();
 }
 
 // ==========================================
-// LOOP PRINCIPAL
+// BUCLE PRINCIPAL (Tiempo Real Continuo)
 // ==========================================
 void loop() {
-  // 1. MEDIR DISTANCIA CON EL HC-SR04
-  distanciaActual = medirDistancia();
+  unsigned long tiempoActual = millis();
 
-  // 2. CONTROL DEL MOTOR EN MODO AUTOMÁTICO
-  // Si está en automático, el sensor decide el giro según las distancias requeridas:
-  if (modoActual == "automatico") {
-    if (distanciaActual >= 10 && distanciaActual <= 25) {
-      girarDerecha();
-    } else if (distanciaActual >= 26 && distanciaActual <= 40) {
-      girarIzquierda();
-    } else {
-      detener();
+  // 1. LECTURA DEL SENSOR Y CONTROL AUTOMÁTICO (Cada 60 ms)
+  if (tiempoActual - ultimoMuestreoSensor >= INTERVALO_SENSOR_MS) {
+    ultimoMuestreoSensor = tiempoActual;
+    
+    distanciaActual = medirDistancia();
+
+    // Solo si estamos en Modo Automático el sensor toma el control físico:
+    if (modoActual == "automatico") {
+      if (distanciaActual >= 10 && distanciaActual <= 25) {
+        girarDerecha();
+      } else if (distanciaActual >= 26 && distanciaActual <= 40) {
+        girarIzquierda();
+      } else {
+        detener();
+      }
     }
+
+    // Monitor Serie informativo
+    Serial.print("Distancia: ");
+    Serial.print(distanciaActual);
+    Serial.print(" cm | Modo: ");
+    Serial.print(modoActual);
+    Serial.print(" | Motor: ");
+    Serial.println(estadoMotor);
   }
 
-  // 3. SINCRONIZACIÓN PERIÓDICA CON LA API REST
-  if (millis() - ultimoEnvio >= INTERVALO_ENVIO_MS) {
-    ultimoEnvio = millis();
-    sincronizarConNube();
+  // 2. SINCRONIZACIÓN CON LA NUBE/API (Cada 350 ms)
+  if (tiempoActual - ultimaSincronizacionAPI >= INTERVALO_API_MS) {
+    ultimaSincronizacionAPI = tiempoActual;
+    sincronizarConAPI();
   }
-
-  delay(20);
 }
