@@ -126,13 +126,18 @@ app.post("/api/telemetry", (req, res) => {
 
   if (dist !== undefined && dist !== null && !isNaN(dist)) {
     state.distanceCm = Number(dist);
-  }
 
-  // Si el sistema está en automático, el servidor registra el movimiento calculado por el sensor
-  if (state.mode === "automatico" && motor) {
-    if (["derecha", "right"].includes(motor)) state.motorState = "derecha";
-    else if (["izquierda", "left"].includes(motor)) state.motorState = "izquierda";
-    else state.motorState = "detenido";
+    // MODO AUTOMÁTICO: El control depende estrictamente de las lecturas del sensor ultrasónico
+    if (state.mode === "automatico") {
+      if (state.distanceCm >= 10 && state.distanceCm <= 25) {
+        state.motorState = "derecha";
+      } else if (state.distanceCm >= 26 && state.distanceCm <= 40) {
+        state.motorState = "izquierda";
+      } else {
+        state.motorState = "detenido";
+      }
+    }
+    // MODO MANUAL: El estado del motor NO cambia por el sensor, pero el sensor sigue reportando distancia.
   }
 
   state.lastDeviceSeen = Date.now();
