@@ -27,16 +27,10 @@
   char pass[] = "TU_CONTRASENA";      // Contraseña de tu red
 #endif
 
-// --- 2. CONFIGURACIÓN DEL SERVIDOR ---
-// A) Si pruebas en tu PC local:
-const char* serverHost = "192.168.1.15"; // CAMBIA por la IP de tu PC (ej: 192.168.1.X)
-const int   serverPort = 3000;
-WiFiClient client; // Cliente HTTP estándar para red local o puerto 80
-
-// B) Si despliegas en la Nube con HTTPS (Render/Railway):
-// const char* serverHost = "tu-app.onrender.com"; // Tu dominio sin "https://"
-// const int   serverPort = 443;
-// WiFiSSLClient client; // Descomenta esta línea si usas HTTPS puerto 443
+// --- 2. CONFIGURACIÓN DEL SERVIDOR EN LA NUBE (RENDER) ---
+const char* serverHost = "proyectodecatedraelectronica.onrender.com";
+const int   serverPort = 443;
+WiFiSSLClient client; // Conexión segura HTTPS para Render
 
 // --- 3. PINES DE HARDWARE ---
 // Sensor Ultrasónico HC-SR04
